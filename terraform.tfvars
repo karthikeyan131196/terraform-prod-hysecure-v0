@@ -1,3 +1,5 @@
+aws_region = "ap-south-1"
+
 vpc_id = "vpc-0cec3aae18043a6db"
 
 subnet_ids = {
