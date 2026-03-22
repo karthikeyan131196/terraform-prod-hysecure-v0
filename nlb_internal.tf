@@ -7,10 +7,7 @@ resource "aws_lb" "internal_nlb" {
   load_balancer_type = "network"
   ip_address_type    = "ipv4"
 
-  subnets = [
-    aws_subnet.az1a.id,
-    aws_subnet.az1b.id
-  ]
+  subnets = values(var.subnet_ids)
 
   enable_cross_zone_load_balancing = true
 
