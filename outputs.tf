@@ -1,24 +1,34 @@
-# VPC & SUBNET ID
+#############################################
+# 90 - OUTPUT VALUES
+# - Exposes key infrastructure details
+# - Used for validation, debugging, and integration
+#############################################
+
+#############################################
+# NETWORK DETAILS
+#############################################
+
 output "vpc_id" {
-  value = aws_vpc.hysecure_vpc.id
+  description = "VPC ID used for deployment"
+  value       = var.vpc_id
 }
 
 output "subnet_ids" {
-  value = [
-    aws_subnet.az1a.id,
-    aws_subnet.az1b.id
-  ]
+  description = "Subnet IDs mapped per AZ"
+  value       = var.subnet_ids
 }
-
-# SECURITY GROUP NAME
 
 output "security_group_id" {
-  value = aws_security_group.hysecure_sg.id
+  description = "Security Group attached to EC2 and ENI"
+  value       = var.security_group_id
 }
 
-# EC2 INSTANCE OUTPUTS
+#############################################
+# EC2 DETAILS
+#############################################
 
 output "instance_ids" {
+  description = "EC2 instance IDs by role"
   value = {
     for k, v in aws_instance.nodes :
     k => v.id
@@ -26,41 +36,36 @@ output "instance_ids" {
 }
 
 output "private_ips" {
+  description = "EC2 private IPs by role"
   value = {
     for k, v in aws_instance.nodes :
     k => v.private_ip
   }
 }
 
-# VIP IP OUTPUT 
+#############################################
+# LOAD BALANCER DETAILS
+#############################################
 
-output "private_key_location" {
-  value = "hysecure-key.pem created in Terraform folder"
+output "internal_nlb_dns" {
+  description = "Internal NLB DNS name"
+  value       = aws_lb.internal_nlb.dns_name
 }
 
-output "vip_ips_by_az" {
-  description = "VIP private IP mapped to Availability Zone"
-
-  value = {
-    (aws_subnet.az1a.availability_zone) = aws_network_interface.vip_az1a.private_ip
-    (aws_subnet.az1b.availability_zone) = aws_network_interface.vip_az1b.private_ip
-  }
+output "external_nlb_dns" {
+  description = "External NLB DNS name"
+  value       = aws_lb.external_nlb.dns_name
 }
 
-# NLB DNS NAME
+#############################################
+# VIP DETAILS
+#############################################
 
-output "internal_nlb_by_az" {
-  description = "Internal NLB DNS and IP per AZ"
-
-  value = {
-    dns_name = aws_lb.internal_nlb.dns_name
-  }
-}
-
-output "external_nlb_by_az" {
-  description = "External NLB DNS and IP per AZ"
+output "vip_ips" {
+  description = "VIP private IPs per AZ"
 
   value = {
-    dns_name = aws_lb.external_nlb.dns_name
+    az1 = aws_network_interface.vip_az1a.private_ip
+    az2 = aws_network_interface.vip_az1b.private_ip
   }
 }

@@ -1,27 +1,24 @@
 # HySecure Multi-Zone AWS Infrastructure – Terraform
 
 ## Overview
-This repository contains **Terraform Infrastructure as Code (IaC)** used to deploy the **HySecure Gateway infrastructure on AWS Multi-Zone**.
 
-The Terraform configuration provisions the following AWS resources:
+This repository contains **Terraform Infrastructure as Code (IaC)** used to deploy the **HySecure Gateway infrastructure on AWS across multiple Availability Zones**.
 
-- VPC
-- Multi-AZ Subnets
-- Internet Gateway
-- Route Tables
-- Security Groups
-- EC2 Instances (Active / Standby / Real Node)
-- External Network Load Balancer
-- Internal Network Load Balancer
-- Target Groups and Listeners
-- VIP Network Interfaces
-- SSH Key Pair generation
+This setup **uses existing AWS resources** (VPC, subnets, security group, key pair) and provisions:
 
-This setup provides **high availability HySecure deployment across multiple availability zones**.
+* EC2 Instances (Active / Standby / Real Node)
+* External Network Load Balancer (NLB)
+* Internal Network Load Balancer (NLB)
+* Target Groups & Listeners (IP-based)
+* VIP Network Interfaces (ENI for failover)
+* Outputs for integration and validation
+
+This architecture provides **high availability (HA)** for HySecure deployment.
 
 ---
 
 # Architecture
+
 Internet
 │
 ▼
@@ -30,210 +27,227 @@ External Network Load Balancer (Port 443)
 ▼
 HySecure Cluster
 
-Active Node (ap-south-1a)
-Standby Node (ap-south-1b)
-Real Node (ap-south-1a)
+* Active Node (ap-south-1a)
+* Standby Node (ap-south-1b)
+* Real Node (ap-south-1a)
 
 │
 ▼
-Internal Network Load Balancer (Between Active and standby)
+Internal Network Load Balancer (Only Active and Standby node)
 
 Ports:
-3306 → Database communication
-939 → InfoAgent communication
+
+* 3306 → Database communication
+* 939  → InfoAgent communication
+
+---
 
 # Repository Structure
+
 hysecure-prod-terraform
 │
-├── main.tf
-├── provider.tf
-├── variables.tf
-├── terraform.tfvars
+├── provider.tf        # Provider configuration
+├── variables.tf       # Input variables           # Existing AWS resources
+├── main.tf            # Derived values
 │
-├── ec2.tf
-├── vpc_subnet.tf
-├── security_groups.tf
-├── internetroute.tf
+├── ec2.tf             # EC2 instances
+├── vip.tf             # VIP ENI
 │
-├── nlb_external.tf
-├── nlb_internal.tf
-├── targetgroup.tf
+├── targetgroup.tf     # Target groups & attachments
+├── nlb-external.tf    # External NLB
+├── nlb-internal.tf    # Internal NLB
 │
-├── outputs.tf
+├── outputs.tf         # Outputs
+│
+├── terraform.tfvars   # Environment config
 └── README.md
 
 ---
 
-# Infrastructure Components
+#  Infrastructure Components
 
-## VPC
-Creates a dedicated VPC for HySecure deployment.
+## Existing AWS Resources (Prerequisite)
 
-CIDR block is defined in **variables.tf**.
+This Terraform **does NOT create**:
 
----
+* VPC
+* Subnets
+* Security Group
+* Key Pair
 
-## Subnets
-
-CIDR block is defined in **variables.tf**.
-
-Two subnets are created across different Availability Zones.
-
-| Subnet      | Availability Zone |
-|------       |------             |
-| subnet-az1a | ap-south-1a       |
-| subnet-az1b | ap-south-1b       |
+These must already exist and are referenced via `terraform.tfvars`.
 
 ---
 
-## EC2 Instances
+## 🔹 EC2 Instances
 
-Number of vm , instance type , vm size , Hysecure AMI , key pair , project name is defined in **terraform.tfvar**.
+Three HySecure nodes are deployed:
 
-Three HySecure nodes are deployed.
+| Instance | AZ          | Role            |
+| -------- | ----------- | --------------- |
+| Active   | ap-south-1a | Primary Gateway |
+| Standby  | ap-south-1b | Secondary Node  |
+| Real     | ap-south-1a | Additional Node |
 
-| Instance | AZ          | Role                     |
-|------    |------       |------                    |
-| Active   | ap-south-1a | Primary HySecure Gateway |
-| Standby  | ap-south-1b | Secondary Node           |
-| Real     | ap-south-1a | Real Node                |
+### Configuration:
 
-Instance configuration:
-
-- Private IP only
-- gp3 root volume
-- SSH key generated automatically
+* Private networking 
+* gp3 root volume
+* Existing SSH key pair
 
 ---
-
-# Load Balancers
 
 ## External Network Load Balancer
 
-Used for **user login traffic**
+* Purpose: User login traffic
+* Port: **443**
+* Protocol: **TCP (pass-through)**
 
-Port: **443**  
-Protocol: **TCP**
-
-Routes traffic to HySecure nodes.
+Routes traffic to EC2 instances via target group.
 
 ---
 
 ## Internal Network Load Balancer
 
-Used for **internal cluster communication**
+Used for internal cluster communication:
 
-| Port | Purpose  |
-|----  |----      |
-| 3306 | Database |
-| 939  | InfoAgent|
-
----
-
-# Security Group Rules
-
-Inbound ports allowed:
-
-| Port   | Protocol | Purpose              |
-|----    |----      |----                  |
-| 443    | TCP      | HySecure login       |
-| 22     | TCP      | SSH                  |
-| 3306   | TCP      | Database             |
-| 939    | TCP      | InfoAgent            |
-| 5536   | TCP      | File synchronization |
-| 51234  | TCP      | Remote meeting       |
-| 4002   | TCP/UDP  | Log synchronization  |
-| 539    | TCP/UDP  | Cluster communication|
-
-Outbound traffic: **Allow All**
+| Port | Purpose   |
+| ---- | --------- |
+| 3306 | Database  |
+| 939  | InfoAgent |
 
 ---
 
-# SSH Key Generation
+## Target Groups
 
-Terraform automatically generates an SSH key pair using:
+* Type: **IP-based**
+* Health Checks:
 
-- `tls_private_key`
-- `aws_key_pair`
-
-Private key saved locally in where terraform excecuted.
-
+* HTTPS checks on port 443
+* Attached to EC2 private IPs
 
 ---
 
-# Prerequisites
+## VIP (Elastic Network Interfaces)
+
+* One ENI per AZ
+* Provides **static private IP**
+* Used for:
+
+  * failover
+  * cluster communication
+  
+
+---
+
+# Security Group Requirements
+
+Ensure the Security Group allows:
+
+| Port  | Protocol | Purpose               |
+| ----- | -------- | --------------------- |
+| 443   | TCP      | HySecure login        |
+| 22    | TCP      | SSH                   |
+| 3306  | TCP      | Database              |
+| 939   | TCP      | InfoAgent             |
+| 5536  | TCP      | File sync             |
+| 51234 | TCP      | Remote meeting        |
+| 4002  | TCP/UDP  | Log sync              |
+| 539   | TCP/UDP  | Cluster communication |
+
+Outbound: Allow All
+
+---
+
+# Configuration
+
+Update `terraform.tfvars`:
+
+aws_region = "ap-south-1"
+
+vpc_id = "vpc-xxxx"
+
+subnet_ids = {
+az1 = "subnet-xxx"
+az2 = "subnet-yyy"
+}
+
+security_group_id = "sg-xxxx"
+key_pair_name     = "your-key"
+
+instance_az_map = {
+active  = "ap-south-1a"
+standby = "ap-south-1b"
+real-1  = "ap-south-1a"
+}
+
+ami_id           = "ami-xxxx"
+instance_type    = "t3.medium"
+root_volume_size = 65
+project_name     = "hysecure-prod"
+
+---
+
+#  Prerequisites
 
 Install the following tools:
 
-- Terraform >= 1.5
-- AWS CLI
+* Terraform >= 1.5
+* AWS CLI
 
-Check versions:
+##  Check Installed Versions
+
+Run:
 
 terraform -v
 aws --version
 
-# Configure AWS Credentials
+## Configure AWS Credentials
 
+Run:
 
 aws configure
 
-[default]
-aws_access_key_id = AKIAxxxxxxxxxxxx
-aws_secret_access_key = xxxxxxxxxxxxx
+Provide the required details:
 
-[default]
-region = ap-south-1
-output = json
+AWS Access Key ID: AKIAxxxxxxxxxxxx
+AWS Secret Access Key: xxxxxxxxxxxxx
+Default region name: ap-south-1
+Default output format: json
 
-# Verify Configuration
+## Verify AWS Configuration
+
+Run :
 
 aws sts get-caller-identity
 
-Expected output:
-
+Expected Output
 {
-"UserId": "XXXXXXXXXXXX",
-"Account": "123456789012",
-"Arn": "arn:aws:iam::123456789012:user/your-user"
+  "UserId": "XXXXXXXXXXXX",
+  "Account": "123456789012",
+  "Arn": "arn:aws:iam::123456789012:user/your-user"
 }
 
-# Deploy Infrastructure
 
-Initialize Terraform:
+# Deployment Steps
 
 terraform init
-
-Validate configuration:
-
 terraform validate
-
 terraform plan
-
-Deploy infrastructure:
-
 terraform apply
 
-or 
+# Outputs
 
-terraform apply -auto-approve
+After deployment:
 
-# Terraform Outputs
-
-After deployment Terraform returns outputs such as:
-
-- `vpc_id`
-- `subnet_ids`
-- `instance_ids`
-- `private_ips`
-- `external_nlb_dns`
-- `internal_nlb_dns`
-- `vip_ips_by_az`
-
----
+* vpc_id
+* subnet_ids
+* instance_ids
+* private_ips
+* external_nlb_dns
+* internal_nlb_dns
+* vip_ips
 
 # Destroy Infrastructure
-
-To remove all resources:
 
 terraform destroy

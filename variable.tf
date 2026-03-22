@@ -1,51 +1,75 @@
-# Region 
+#############################################
+# 01 - INPUT VARIABLES
+# - Defines all configurable inputs
+# - Used across EC2, NLB, TG, and networking
+#############################################
+
+#############################################
+# AWS CONFIGURATION
+#############################################
+
 variable "aws_region" {
-  description = "AWS Region"
+  description = "AWS region where resources will be deployed (e.g., ap-south-1)"
   type        = string
 }
 
-# Vpc 
+#############################################
+# NETWORK CONFIGURATION (EXISTING INFRA)
+#############################################
 
 variable "vpc_id" {
-  type = string
+  description = "Existing VPC ID where resources will be deployed"
+  type        = string
 }
 
-# Subnets
 variable "subnet_ids" {
-  type = map(string)
+  description = "Map of subnet IDs per AZ (e.g., az1, az2)"
+  type        = map(string)
 }
 
-# Security Group
 variable "security_group_id" {
-  type = string
+  description = "Existing Security Group ID to attach to EC2 and ENI"
+  type        = string
 }
 
-# Key Pair
+#############################################
+# ACCESS CONFIGURATION
+#############################################
+
 variable "key_pair_name" {
-  type = string
+  description = "Existing AWS key pair name for SSH access"
+  type        = string
 }
 
-# EC2 Mapping (AZ)
+#############################################
+# EC2 CONFIGURATION
+#############################################
+
 variable "instance_az_map" {
-  type = map(string)
+  description = "Mapping of instance roles to availability zones (e.g., active, standby)"
+  type        = map(string)
 }
 
-# AMI
 variable "ami_id" {
-  type = string
+  description = "AMI ID used to launch EC2 instances"
+  type        = string
 }
 
-# Instance Type
 variable "instance_type" {
-  type = string
+  description = "EC2 instance type (e.g., t3.medium)"
+  type        = string
 }
 
-# Root Volume
 variable "root_volume_size" {
-  type = number
+  description = "Root volume size in GB"
+  type        = number
 }
 
-# Project Name
+#############################################
+# PROJECT / TAGGING
+#############################################
+
 variable "project_name" {
-  type = string
+  description = "Project name used for resource naming and tagging"
+  type        = string
 }

@@ -1,3 +1,14 @@
+#############################################
+# 20 - TARGET GROUP CONFIGURATION
+# - Defines all target groups (HTTPS, DB, INFO)
+# - Uses IP-based targets
+# - Includes health checks
+#############################################
+
+#############################################
+# TARGET GROUP DEFINITIONS
+#############################################
+
 locals {
   target_groups = {
     https = {
@@ -26,17 +37,25 @@ locals {
   }
 }
 
+#############################################
 # CREATE TARGET GROUPS
+#############################################
 
 resource "aws_lb_target_group" "tg" {
   for_each = local.target_groups
 
+  ###########################################
+  # BASIC CONFIGURATION
+  ###########################################
   name        = "${var.project_name}-tg-${each.key}"
   port        = each.value.port
   protocol    = each.value.protocol
   target_type = "ip"
   vpc_id      = var.vpc_id
 
+  ###########################################
+  # HEALTH CHECK CONFIGURATION
+  ###########################################
   health_check {
     protocol            = each.value.health_protocol
     port                = each.value.health_port
@@ -47,12 +66,18 @@ resource "aws_lb_target_group" "tg" {
     timeout             = 5
   }
 
+  ###########################################
+  # TAGGING
+  ###########################################
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-tg-${each.key}"
+    Type = each.key
   })
 }
 
-# FILTER ACTIVE + STANDBY
+#############################################
+# FILTER INTERNAL NODES (ACTIVE + STANDBY)
+#############################################
 
 locals {
   internal_nodes = {
@@ -61,7 +86,13 @@ locals {
   }
 }
 
-# ATTACHMENTS - HTTPS (ALL NODES)
+#############################################
+# TARGET GROUP ATTACHMENTS
+#############################################
+
+###########################################
+# HTTPS - Attach ALL nodes
+###########################################
 
 resource "aws_lb_target_group_attachment" "https" {
   for_each = aws_instance.nodes
@@ -71,7 +102,9 @@ resource "aws_lb_target_group_attachment" "https" {
   port             = 443
 }
 
-# ATTACHMENTS - DB (ONLY active + standby)
+###########################################
+# DB - Attach only Active + Standby
+###########################################
 
 resource "aws_lb_target_group_attachment" "db" {
   for_each = local.internal_nodes
@@ -81,7 +114,9 @@ resource "aws_lb_target_group_attachment" "db" {
   port             = 3306
 }
 
-# ATTACHMENTS - INFO (ONLY active + standby)
+###########################################
+# INFO - Attach only Active + Standby
+###########################################
 
 resource "aws_lb_target_group_attachment" "info" {
   for_each = local.internal_nodes
